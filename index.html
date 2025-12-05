@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>群群YouTube影片轉新聞</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 設置字體為台灣常用的無襯線字體，模擬新聞媒體風格 */
+        body {
+            font-family: 'Inter', 'Noto Sans TC', 'Microsoft YaHei', sans-serif;
+            background-color: #f7f7f7;
+        }
+        /* ETtoday 標誌性的橘紅色調 */
+        .et-primary { background-color: #ff5500; }
+        .et-text-primary { color: #ff5500; }
+        .et-border-primary { border-color: #ff5500; }
+        .loading-animation {
+            border-top-color: transparent;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl overflow-hidden">
+        <!-- Header 區塊 (ETtoday風格模擬) -->
+        <header class="et-primary text-white p-4">
+            <h1 class="text-3xl font-bold tracking-tight">
+                <span class="font-black">E<span class="text-black">T</span></span>today 群群YouTube影片轉新聞
+            </h1>
+            <p class="text-sm opacity-90 mt-1">資深文字記者筆法 · YouTube 影片內容轉新聞</p>
+        </header>
+
+        <main class="p-6 space-y-8">
+            <!-- 1. 設定與 API Key 輸入 -->
+            <section class="bg-gray-50 p-5 rounded-lg border">
+                <h2 class="text-xl font-semibold mb-4 et-text-primary border-b pb-2">新聞生成設定</h2>
+
+                <div class="space-y-4">
+                    <!-- API Key -->
+                    <div>
+                        <label for="apiKey" class="block text-sm font-medium text-gray-700">Gemini API Key <span class="text-red-500">*必填</span></label>
+                        <input type="password" id="apiKey" class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm p-3 focus:border-et-primary focus:ring-et-primary" placeholder="請填入您的 API Key">
+                    </div>
+
+                    <!-- YouTube URL -->
+                    <div>
+                        <label for="youtubeUrl" class="block text-sm font-medium text-gray-700">YouTube 影片連結 (僅供參考)</label>
+                        <input type="url" id="youtubeUrl" value="https://www.youtube.com/watch?v=e9_vG3ZQkYQ" class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm p-3 focus:border-et-primary focus:ring-et-primary" placeholder="範例: https://www.youtube.com/watch?v=...">
+                    </div>
+
+                    <!-- 影片內容摘要 (新增的輸入框) -->
+                    <div>
+                        <label for="videoSummary" class="block text-sm font-medium text-gray-700">影片內容摘要 <span class="text-red-500">*用於生成新聞</span></label>
+                        <textarea id="videoSummary" rows="4" class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm p-3 focus:border-et-primary focus:ring-et-primary" placeholder="請輸入影片的核心內容、人物、事件時間等關鍵資訊。例如：關於「看你老墓」主持人司徒調查國父首席顧問荷馬李將軍墓地被盜傳言，最終查明是後人於 2025 年 7 月 28 日完成低調遷葬。">關於「看你老墓」主持人司徒調查國父首席顧問荷馬李將軍墓地被盜的傳言。最終調查結果為：墓地並非被盜，而是已於 2025 年 7 月 28 日由將軍後人低調完成遷葬儀式，將靈骨遷回美國安厝。請特別強調主持人是「司徒」。</textarea>
+                    </div>
+
+                    <!-- 字數與段落數 -->
+                    <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                        <div class="w-full sm:w-1/2">
+                            <label for="wordCount" class="block text-sm font-medium text-gray-700">目標字數 (約)</label>
+                            <input type="number" id="wordCount" value="500" min="100" max="2000" class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm p-3" placeholder="例如 500">
+                        </div>
+                        <div class="w-full sm:w-1/2">
+                            <label for="paragraphCount" class="block text-sm font-medium text-gray-700">段落數 (約)</label>
+                            <input type="number" id="paragraphCount" value="5" min="2" max="15" class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm p-3" placeholder="例如 5">
+                        </div>
+                    </div>
+
+                    <!-- 生成按鈕 -->
+                    <button id="generateBtn" class="et-primary text-white font-bold py-3 px-6 rounded-lg w-full transition duration-300 hover:opacity-90 disabled:bg-gray-400 flex items-center justify-center">
+                        <span id="buttonText">一鍵生成新聞稿</span>
+                        <div id="loadingSpinner" class="hidden w-5 h-5 border-2 border-white rounded-full loading-animation ml-3"></div>
+                    </button>
+                </div>
+            </section>
+
+            <!-- 2. 結果顯示區塊 -->
+            <section id="resultsContainer" class="hidden">
+                <h2 class="text-xl font-semibold mb-4 et-text-primary border-b pb-2">新聞稿成品</h2>
+
+                <div id="newsOutput" class="space-y-6">
+                    <!-- 標題區塊 -->
+                    <div class="p-4 border-l-4 et-border-primary bg-yellow-50 rounded-lg">
+                        <p id="headline15" class="text-lg font-medium text-gray-600 mb-1"></p>
+                        <h3 id="headline25" class="text-2xl sm:text-3xl font-black leading-tight text-gray-900"></h3>
+                    </div>
+
+                    <!-- 內文區塊 -->
+                    <div id="articleBody" class="text-gray-800 leading-relaxed text-base space-y-5 whitespace-pre-wrap">
+                        <!-- 內文會顯示在這裡 -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. 錯誤訊息區塊 -->
+            <div id="errorBox" class="hidden bg-red-100 border border-red-400 text-red-700 p-4 rounded-md" role="alert">
+                <strong class="font-bold">生成失敗！</strong>
+                <span id="errorMessage" class="block sm:inline"></span>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // 常數和 DOM 元素獲取
+        const API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
+        const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
+        
+        const generateBtn = document.getElementById('generateBtn');
+        const apiKeyInput = document.getElementById('apiKey');
+        const youtubeUrlInput = document.getElementById('youtubeUrl');
+        const videoSummaryInput = document.getElementById('videoSummary'); // 新增
+        const wordCountInput = document.getElementById('wordCount');
+        const paragraphCountInput = document.getElementById('paragraphCount');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const errorBox = document.getElementById('errorBox');
+        const errorMessage = document.getElementById('errorMessage');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const buttonText = document.getElementById('buttonText');
+
+        // ==== 核心輔助函式 (API 請求與重試) ====
+
+        /**
+         * 實作指數退避策略的 fetch 函式。
+         * @param {string} url - API 網址
+         * @param {object} options - Fetch 選項
+         * @param {number} retries - 允許的重試次數
+         * @returns {Promise<Response>}
+         */
+        async function exponentialBackoffFetch(url, options, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) {
+                        return response;
+                    }
+                    
+                    // 檢查是否為可重試的錯誤碼 (e.g., 429 Too Many Requests, 5xx Server Errors)
+                    if (response.status === 429 || response.status >= 500) {
+                        // 這是預期中的錯誤，我們將執行退避
+                        if (i < retries - 1) {
+                            const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            // console.log(`Retry ${i + 1} after ${delay}ms...`);
+                            continue; // 跳到下一次迴圈
+                        }
+                    }
+
+                    // 對於非預期的錯誤 (例如 400 Bad Request, 401 Unauthorized)，直接拋出錯誤
+                    const errorJson = await response.json();
+                    throw new Error(errorJson.error.message || `API 請求失敗，狀態碼: ${response.status}`);
+
+                } catch (error) {
+                    if (i === retries - 1) {
+                        throw error;
+                    }
+                    // 其他網路錯誤或 JSON 解析錯誤，執行退避
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    // console.log(`Retry ${i + 1} after ${delay}ms due to network error...`);
+                }
+            }
+            throw new Error("API 請求達到最大重試次數。");
+        }
+
+
+        // ==== 主要邏輯：生成新聞稿 ====
+
+        generateBtn.addEventListener('click', async () => {
+            const apiKey = apiKeyInput.value.trim();
+            const youtubeUrl = youtubeUrlInput.value.trim();
+            const videoSummary = videoSummaryInput.value.trim(); // 取得新的摘要內容
+            const wordCount = wordCountInput.value.trim();
+            const paragraphCount = paragraphCountInput.value.trim();
+
+            // 1. 輸入驗證
+            if (!apiKey) {
+                showError('請輸入您的 Gemini API Key！');
+                return;
+            }
+            if (!videoSummary) {
+                showError('請提供影片內容摘要，這是生成新聞稿的依據。');
+                return;
+            }
+
+            // 顯示載入狀態
+            setLoading(true);
+            hideError();
+            resultsContainer.classList.add('hidden');
+
+            try {
+                // 2. 準備給 LLM 的系統指令
+                const systemPrompt = `
+                    你是一位資深的文字記者，專門為台灣媒體 ETtoday 新聞雲撰寫報導。
+                    你的文筆應當客觀、專業、語氣緊湊且有重點。
+                    請根據提供的「影片連結」（如果有效）和「影片內容摘要」，撰寫一篇新聞報導。
+                    
+                    **要求格式**：
+                    1.  **標題一 (headline25)**：約 25 個中文字（繁體），作為新聞的主標題。
+                    2.  **標題二 (headline15)**：約 15 個中文字（繁體），作為新聞的副標題。
+                    3.  **新聞內文 (articleBody)**：
+                        - 總字數約 ${wordCount} 字。
+                        - 總段落數約 ${paragraphCount} 段。
+                        - 內文必須完整，避免使用條列式。
+                        - 內文要符合資深記者的敘事風格，包含「誰」、「何時」、「何地」、「發生了什麼事」、「後續影響」等新聞要素。
+                        - 內文若提到時間或人物，請模擬正式新聞報導的寫法（如：今（29）日、前總統蔣中正）。
+                `.trim();
+
+                // 3. 準備 LLM 的用戶請求
+                // 現在用戶的查詢是根據輸入框的內容動態生成的。
+                const userQuery = `
+                    這是影片連結：${youtubeUrl}
+                    這是影片的內容摘要，請根據此摘要生成新聞：
+                    ---
+                    ${videoSummary}
+                    ---
+                `.trim();
+
+                // 4. 準備 API 請求的 Payload (使用 JSON 結構化輸出)
+                const apiUrl = `${API_BASE_URL}${MODEL_NAME}:generateContent?key=${apiKey}`;
+                
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    // IMPORTANT: 移除 tools 屬性，因為結構化輸出 (JSON) 不支持 Google Search Grounding。
+                    systemInstruction: {
+                        parts: [{ text: systemPrompt }]
+                    },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                "headline25": { "type": "STRING" },
+                                "headline15": { "type": "STRING" },
+                                "articleBody": { "type": "STRING" }
+                            },
+                            required: ["headline25", "headline15", "articleBody"]
+                        }
+                    }
+                };
+
+                // 5. 執行 API 請求 (使用指數退避)
+                const response = await exponentialBackoffFetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                
+                // 檢查是否有有效的內容
+                if (!result.candidates || result.candidates.length === 0) {
+                    throw new Error('API 回應無內容，請檢查輸入或 API 狀態。');
+                }
+
+                const jsonText = result.candidates[0].content.parts[0].text;
+                const newsData = JSON.parse(jsonText);
+
+                // 6. 顯示結果
+                document.getElementById('headline25').textContent = newsData.headline25 || '（主標題生成失敗）';
+                document.getElementById('headline15').textContent = newsData.headline15 || '（副標題生成失敗）';
+                
+                // 將內文按段落（\n\n 或 \n）拆分，並用 <p> 包裹以保持間距
+                const paragraphs = newsData.articleBody.split(/\n\s*\n|\n/g).filter(p => p.trim() !== '');
+                const bodyHtml = paragraphs.map(p => `<p class="indent-8">${p}</p>`).join('');
+
+                document.getElementById('articleBody').innerHTML = bodyHtml || '（內文生成失敗）';
+
+                resultsContainer.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("生成新聞時發生錯誤:", error);
+                showError('發生錯誤：' + error.message);
+            } finally {
+                // 結束載入狀態
+                setLoading(false);
+            }
+        });
+
+        // ==== UI 輔助函式 ====
+
+        /** 顯示錯誤訊息 */
+        function showError(message) {
+            errorBox.classList.remove('hidden');
+            errorMessage.textContent = message;
+        }
+
+        /** 隱藏錯誤訊息 */
+        function hideError() {
+            errorBox.classList.add('hidden');
+        }
+
+        /** 設定載入狀態 */
+        function setLoading(isLoading) {
+            generateBtn.disabled = isLoading;
+            if (isLoading) {
+                loadingSpinner.classList.remove('hidden');
+                buttonText.textContent = '生成中，請稍候...';
+            } else {
+                buttonText.textContent = '一鍵生成新聞稿';
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
